@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Dashboard financiero — Grupo empresarial</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --navy:#1a2440; --blue:#2f6fed;
+  --text:#1f2430; --muted:#6b7280; --pos:#1d8a53; --neg:#c53030; --warn:#b7791f;
+  --radius:12px; --gap:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45;}
+.wrap{max-width:1200px;margin:0 auto;padding:10px;}
+header{background:var(--navy);color:#fff;padding:16px;border-radius:var(--radius);margin-bottom:var(--gap);}
+header h1{font-size:17px;font-weight:600;}
+header p{font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-top:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch;}
+.tab{flex:0 0 auto;padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-size:12.5px;cursor:pointer;white-space:nowrap;}
+.tab.on{background:var(--blue);border-color:var(--blue);font-weight:600;}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);margin-bottom:var(--gap);}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(4,1fr);}}
+.kpi{background:var(--card);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.07);}
+.kpi .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.kpi .v{font-size:19px;font-weight:700;margin-top:2px;}
+.kpi .v.neg{color:var(--neg);}
+.kpi .v.pos{color:var(--pos);}
+.grid{display:grid;grid-template-columns:1fr;gap:var(--gap);}
+@media(min-width:900px){.grid.two{grid-template-columns:1fr 1fr;}}
+.card{background:var(--card);border-radius:var(--radius);padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:var(--gap);}
+.card h2{font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+.card h2 .tot{font-size:15px;font-weight:700;}
+select{padding:7px 10px;border:1px solid #d7dae0;border-radius:8px;font-size:13px;background:#fff;}
+.row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #f0f1f3;font-size:13px;}
+.row:last-child{border-bottom:none;}
+.row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.row .a{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500;}
+.row .a.neg{color:var(--neg);}
+.sub{font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
+.note{font-size:12px;color:var(--muted);margin-bottom:8px;}
+.otros{font-style:italic;color:var(--muted);}
+details summary{cursor:pointer;font-size:12.5px;color:var(--blue);padding:6px 0;user-select:none;}
+.chartbox{position:relative;height:230px;}
+@media(min-width:760px){.chartbox{height:290px;}}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;}
+th{text-align:left;padding:6px 8px;border-bottom:2px solid #e2e5ea;color:var(--muted);font-size:10.5px;text-transform:uppercase;}
+td{padding:6px 8px;border-bottom:1px solid #f0f1f3;font-variant-numeric:tabular-nums;}
+td.neg{color:var(--neg);font-weight:600;}
+.alert{border-left:4px solid var(--warn);background:#fdf8ee;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;}
+.alert.high{border-color:var(--neg);background:#fdf1f1;}
+.alert b{display:block;font-size:12.5px;margin-bottom:1px;}
+.alert span{color:var(--muted);font-size:12px;}
+footer{text-align:center;font-size:11.5px;color:var(--muted);padding:14px 0;}
+.empty{color:var(--muted);font-size:12.5px;padding:8px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Dashboard financiero — Grupo empresarial</h1>
+  <p>Julio – diciembre 2026 · <span id="status">cargando datos de OneDrive…</span></p>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Saldo en bancos</div><div class="v" id="k-bancos">–</div></div>
+  <div class="kpi"><div class="l">Por cobrar</div><div class="v" id="k-cobrar">–</div></div>
+  <div class="kpi"><div class="l">Por pagar</div><div class="v" id="k-pagar">–</div></div>
+  <div class="kpi"><div class="l">Neto proyectado</div><div class="v" id="k-neto">–</div></div>
+</div>
+
+<div class="card">
+  <h2>Saldos en bancos <select id="fecha"></select></h2>
+  <div class="note" id="bancos-note"></div>
+  <div id="bancos"></div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h2>Cuentas por cobrar <span class="tot" id="cobrar-tot"></span></h2>
+    <div class="note">Solo cuentas con saldo > 0</div>
+    <div id="cobrar"></div>
+  </div>
+  <div class="card">
+    <h2>Cuentas por pagar <span class="tot" id="pagar-tot"></span></h2>
+    <div class="note">Solo cuentas con saldo > 0</div>
+    <div id="pagar"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Proyección de ingresos vs. egresos</h2>
+  <div class="chartbox"><canvas id="chart"></canvas></div>
+  <table id="proy-table"></table>
+</div>
+
+<div class="card" id="repos-card" style="display:none">
+  <h2>Reposiciones pendientes <span class="tot" id="repos-tot"></span></h2>
+  <div class="note">CxP con estado "Por pagar (Reposición)" por responsable</div>
+  <div id="repos"></div>
+</div>
+
+<div class="card">
+  <h2>Alertas</h2>
+  <div id="alertas"></div>
+</div>
+
+<footer>Generado desde MATRIZ CxP e Ingresos · datos embebidos (sin conexión a la matriz en vivo)</footer>
+</div>
+
+<script>
+const D_BACKUP = {"actualizado": "2026-07-30", "meses": ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"], "cxp": [{"id": 1, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "DEVOLUCIONES", "tipo": "Administrativo Generales", "banco": "POR DEFINIR", "prov": "SR. MARQUEZ", "concepto": "Devolución Terreno San Mateo", "monto": 68000, "saldo": 52000, "estado": "Pendiente", "pagado": 16000, "resp": ""}, {"id": 2, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "DEVOLUCIONES", "tipo": "Administrativo Generales", "banco": "POR DEFINIR", "prov": "SR. BOLIVAR BRAVO", "concepto": "Devolución Préstamo", "monto": 1500, "saldo": 1500, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 3, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "POR DEFINIR", "prov": "Préstamo Pacífico OFICINAS", "concepto": "Saldo a JUNIO 2026", "monto": 44098, "saldo": 44098, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 4, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "POR DEFINIR", "prov": "Préstamo Internacional NAVEGANTE", "concepto": "Saldo a JUNIO 2026", "monto": 15832.43, "saldo": 15832.43, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 5, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "EQUIPOS Y MAQUINARIA", "tipo": "Administrativo Negocio/Proyecto", "banco": "POR DEFINIR", "prov": "Compra Contenedores", "concepto": "Compra Contenedores", "monto": 1500, "saldo": 1500, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 6, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "POR DEFINIR", "prov": "Cristhian Barcia", "concepto": "Compra Agua", "monto": 3500, "saldo": 3500, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 7, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "IESS", "tipo": "Administrativo Negocio/Proyecto", "banco": "POR DEFINIR", "prov": "IESS CMA", "concepto": "IESS", "monto": 9600, "saldo": 9600, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 8, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "IESS", "tipo": "Administrativo Negocio/Proyecto", "banco": "POR DEFINIR", "prov": "IESS ING. KATTY", "concepto": "IESS", "monto": 23800, "saldo": 23800, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 9, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "DEVOLUCIONES", "tipo": "Administrativo Negocio/Proyecto", "banco": "Pacífico CMA (Cons. Manabí Avanza)", "prov": "MACMOR", "concepto": "DEVOLUCIÓN MACMOR", "monto": 11581.44, "saldo": 11581.44, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 10, "mes": "2026-07", "giro": "MACMOR", "capitulo": "SERVICIOS PROFESIONALES Y ESTUDIOS", "tipo": "Operativo", "banco": "Pichincha MACMOR", "prov": "JIMMY PAZMIÑO", "concepto": "SALDO ESTUDIOS", "monto": 57000, "saldo": 57000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 11, "mes": "2026-07", "giro": "MACMOR", "capitulo": "SERVICIOS PROFESIONALES Y ESTUDIOS", "tipo": "Operativo", "banco": "Pichincha MACMOR", "prov": "DAVIMEN S.A.", "concepto": "Geofísica ESTUDIOS DANILO DÁVILA", "monto": 3245, "saldo": 3245, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 12, "mes": "2026-07", "giro": "MACMOR", "capitulo": "SERVICIOS PROFESIONALES Y ESTUDIOS", "tipo": "Operativo", "banco": "Pichincha MACMOR", "prov": "CONSULJOC S.A.", "concepto": "SPT Estudios Tosagua", "monto": 1688, "saldo": 1688, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 13, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "Produbanco XAMO", "prov": "Préstamo Pacífico OFICINAS", "concepto": "Letra 1 JULIO", "monto": 7981.19, "saldo": 7981.19, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 14, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "Produbanco XAMO", "prov": "Préstamo Pacífico OFICINAS", "concepto": "Letra 31 JULIO", "monto": 7885.34, "saldo": 7885.34, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 15, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "Produbanco XAMO", "prov": "AMBACAR", "concepto": "Letra Camioneta (3/48)", "monto": 1180, "saldo": 1180, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 16, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "ALIMENTACIÓN", "tipo": "Indirecto", "banco": "Produbanco KAXAMM", "prov": "LA ORCA", "concepto": "Comida hasta JUNIO 2026", "monto": 1992, "saldo": 1992, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 17, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "ALIMENTACIÓN", "tipo": "Indirecto", "banco": "Produbanco XAMO", "prov": "LEONCIO", "concepto": "Comida Cantera hasta JUNIO 2026", "monto": 177, "saldo": 177, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 18, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "PRÉSTAMOS Y FINANCIERO", "tipo": "Administrativo Generales", "banco": "Produbanco XAMO", "prov": "TARJETAS", "concepto": "Cuota Mensual", "monto": 1900.83, "saldo": 1900.83, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 19, "mes": "2026-07", "giro": "CANTERA LA TRAVESIA (XAMO)", "capitulo": "IESS", "tipo": "Administrativo Negocio/Proyecto", "banco": "Produbanco XAMO", "prov": "IESS", "concepto": "IESS MENSUAL", "monto": 818.38, "saldo": 818.38, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 20, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "IESS", "tipo": "Administrativo Negocio/Proyecto", "banco": "Produbanco KAXAMM", "prov": "IESS", "concepto": "IESS MENSUAL", "monto": 504.37, "saldo": 504.37, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 21, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "IESS", "tipo": "Administrativo Negocio/Proyecto", "banco": "Produbanco KAXAMM", "prov": "IESS", "concepto": "IESS MENSUAL", "monto": 99.94, "saldo": 99.94, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 22, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "NÓMINA", "tipo": "Administrativo Negocio/Proyecto", "banco": "Produbanco KAXAMM", "prov": "ROL DE PAGOS", "concepto": "ROL DE PAGOS", "monto": 10000, "saldo": 10000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 23, "mes": "2026-07", "giro": "ADMINISTRATIVO", "capitulo": "NÓMINA", "tipo": "Administrativo Negocio/Proyecto", "banco": "Pichincha MACMOR", "prov": "ROL DE PAGOS", "concepto": "ROL DE PAGOS", "monto": 3000, "saldo": 3000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 24, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JAMBOL MOREIRA CEDEÑO", "concepto": "LLANTAS", "monto": 363.24, "saldo": 363.24, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 25, "mes": "2026-08", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JAMBOL MOREIRA CEDEÑO", "concepto": "LLANTAS", "monto": 363.24, "saldo": 363.24, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 26, "mes": "2026-09", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JAMBOL MOREIRA CEDEÑO", "concepto": "LLANTAS", "monto": 363.24, "saldo": 363.24, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 27, "mes": "2026-10", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JAMBOL MOREIRA CEDEÑO", "concepto": "LLANTAS", "monto": 363.24, "saldo": 363.24, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 28, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "EQUIPOS Y MAQUINARIA", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JHONNY VERA", "concepto": "COMPRA RODILLO DYNAPAC", "monto": 15000, "saldo": 15000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 29, "mes": "2026-08", "giro": "KAXAMM", "capitulo": "EQUIPOS Y MAQUINARIA", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JHONNY VERA", "concepto": "COMPRA RODILLO DYNAPAC", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 30, "mes": "2026-09", "giro": "KAXAMM", "capitulo": "EQUIPOS Y MAQUINARIA", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "JHONNY VERA", "concepto": "COMPRA RODILLO DYNAPAC", "monto": 4000, "saldo": 4000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 31, "mes": "2026-07", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "METALHIERRO", "concepto": "PAGOS MATERIALES PROPEMAR", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 32, "mes": "2026-08", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "METALHIERRO", "concepto": "PAGOS MATERIALES PROPEMAR", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 33, "mes": "2026-09", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "METALHIERRO", "concepto": "PAGOS MATERIALES PROPEMAR", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 34, "mes": "2026-10", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "METALHIERRO", "concepto": "PAGOS MATERIALES PROPEMAR", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 35, "mes": "2026-11", "giro": "KAXAMM", "capitulo": "PROVEEDORES Y MATERIALES", "tipo": "Operativo", "banco": "Produbanco KAXAMM", "prov": "METALHIERRO", "concepto": "SALDO PAGOS MATERIALES PROPEMAR", "monto": 5000, "saldo": 5000, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 36, "mes": "2026-07", "giro": "MACMOR", "capitulo": "NÓMINA", "tipo": "Administrativo Negocio/Proyecto", "banco": "Pichincha MACMOR", "prov": "ROL DE PAGOS", "concepto": "HORAS EXTRAS JUNIO", "monto": 267.58, "saldo": 267.58, "estado": "Pendiente", "pagado": 0, "resp": ""}, {"id": 37, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 38, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "JURADO ROMERO ANDREA NICOLE", "concepto": "", "monto": 0, "saldo": 15.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 39, "mes": "2026-06", "giro": "KAXAMM", "capitulo": "MANTENIMIENTO Y REPARACIÓN MAQUINARIA", "tipo": "", "banco": "Produbanco KAXAMM", "prov": "MIÑO BRIONES JOSE LUIS", "concepto": "TRABAJOS VARIOS EN TORNO", "monto": 38.8, "saldo": 0, "estado": "Cancelado", "pagado": 0, "resp": ""}, {"id": 40, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 31.21, "estado": "", "pagado": 0, "resp": ""}, {"id": 41, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "METALHIERRO S.A.", "concepto": "", "monto": 0, "saldo": 198.35, "estado": "", "pagado": 0, "resp": ""}, {"id": 42, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 52.09, "estado": "", "pagado": 0, "resp": ""}, {"id": 43, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 50.48, "estado": "", "pagado": 0, "resp": ""}, {"id": 44, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VERA FUENTES GALFIX MARLON ATILIO", "concepto": "", "monto": 0, "saldo": 74.86, "estado": "", "pagado": 0, "resp": ""}, {"id": 45, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 46, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 34.65, "estado": "", "pagado": 0, "resp": ""}, {"id": 47, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 46.55, "estado": "", "pagado": 0, "resp": ""}, {"id": 48, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 226, "estado": "", "pagado": 0, "resp": ""}, {"id": 49, "mes": "2026-06", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "Produbanco KAXAMM", "prov": "PINTURAS EL MAESTRO CIA. LTDA.", "concepto": "", "monto": 431.52, "saldo": -0.01, "estado": "Pagado", "pagado": 431.52, "resp": ""}, {"id": 50, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 43.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 51, "mes": "2026-06", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "Produbanco KAXAMM", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 28.31, "saldo": 0.0, "estado": "Pagado", "pagado": 28.31, "resp": ""}, {"id": 52, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PROVEEDORA HIDRAULICA MANGUERAS Y CONEXIONES PROVEHIMACO S.A.", "concepto": "", "monto": 0, "saldo": 7.55, "estado": "", "pagado": 0, "resp": ""}, {"id": 53, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 54, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 1038.1, "estado": "", "pagado": 0, "resp": ""}, {"id": 55, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VILLAVICENCIO CHAVEZ JOHANNA JISSELLA", "concepto": "", "monto": 0, "saldo": 694.52, "estado": "", "pagado": 0, "resp": ""}, {"id": 56, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESSART S.A.", "concepto": "", "monto": 0, "saldo": 5.18, "estado": "", "pagado": 0, "resp": ""}, {"id": 57, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 16.82, "estado": "", "pagado": 0, "resp": ""}, {"id": 58, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 58.96, "estado": "", "pagado": 0, "resp": ""}, {"id": 59, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 28.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 60, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VERA TOALA CRUZ ALINA", "concepto": "", "monto": 0, "saldo": 2.51, "estado": "", "pagado": 0, "resp": ""}, {"id": 61, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "COMPAÑÌA DE TRANSPORTE DE CARGA PESADA GICEL GRUAS GILER CELORIO S.A.", "concepto": "", "monto": 0, "saldo": 386.1, "estado": "", "pagado": 0, "resp": ""}, {"id": 62, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "SERVICIOS METALURGICOS S.A SERMET", "concepto": "", "monto": 0, "saldo": 58.82, "estado": "", "pagado": 0, "resp": ""}, {"id": 63, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 305.61, "estado": "", "pagado": 0, "resp": ""}, {"id": 64, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PROVEEDORA HIDRAULICA MANGUERAS Y CONEXIONES PROVEHIMACO S.A.", "concepto": "", "monto": 0, "saldo": 7.17, "estado": "", "pagado": 0, "resp": ""}, {"id": 65, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 38.3, "estado": "", "pagado": 0, "resp": ""}, {"id": 66, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 51.57, "estado": "", "pagado": 0, "resp": ""}, {"id": 67, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "COMPAÑÌA DE TRANSPORTE DE CARGA PESADA GICEL GRUAS GILER CELORIO S.A.", "concepto": "", "monto": 0, "saldo": 237.6, "estado": "", "pagado": 0, "resp": ""}, {"id": 68, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 0, "saldo": 2.83, "estado": "", "pagado": 0, "resp": ""}, {"id": 69, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 1022.3, "estado": "", "pagado": 0, "resp": ""}, {"id": 70, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 71, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "LMMANTA S.A.S.", "concepto": "", "monto": 0, "saldo": 357.67, "estado": "", "pagado": 0, "resp": ""}, {"id": 72, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 35.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 73, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MACIAS BRAVO GRIMANESA DEL CARMEN", "concepto": "", "monto": 0, "saldo": 48.11, "estado": "", "pagado": 0, "resp": ""}, {"id": 74, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 67.66, "estado": "", "pagado": 0, "resp": ""}, {"id": 75, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEDINA DELGADO SANDRO PATRICIO", "concepto": "", "monto": 0, "saldo": 1345.54, "estado": "", "pagado": 0, "resp": ""}, {"id": 76, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 63.62, "estado": "", "pagado": 0, "resp": ""}, {"id": 77, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 29.2, "estado": "", "pagado": 0, "resp": ""}, {"id": 78, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 33.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 79, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 7.16, "estado": "", "pagado": 0, "resp": ""}, {"id": 80, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 81, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 59.9, "estado": "", "pagado": 0, "resp": ""}, {"id": 82, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 41.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 83, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 0, "saldo": 8.16, "estado": "", "pagado": 0, "resp": ""}, {"id": 84, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "GILCES SALVATIERRA DENISSE ELIZABETH", "concepto": "", "monto": 0, "saldo": 11.33, "estado": "", "pagado": 0, "resp": ""}, {"id": 85, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "TRACTO PARTES S.A.", "concepto": "", "monto": 0, "saldo": 319.35, "estado": "", "pagado": 0, "resp": ""}, {"id": 86, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 248.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 87, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "DELGADO PANCHANA MARIA DE LOURDES", "concepto": "", "monto": 0, "saldo": 75.24, "estado": "", "pagado": 0, "resp": ""}, {"id": 88, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 2078.2, "estado": "", "pagado": 0, "resp": ""}, {"id": 89, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 78.07, "estado": "", "pagado": 0, "resp": ""}, {"id": 90, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "TRECX S.A.", "concepto": "", "monto": 0, "saldo": 33.77, "estado": "", "pagado": 0, "resp": ""}, {"id": 91, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "CORRALES PARRAGA ANDRES MANUEL", "concepto": "", "monto": 0, "saldo": 325.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 92, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 47.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 93, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 26.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 94, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 95, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 32.9, "estado": "", "pagado": 0, "resp": ""}, {"id": 96, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 64.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 97, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 40.26, "estado": "", "pagado": 0, "resp": ""}, {"id": 98, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 854.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 99, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "BAZURTO DEMERA PEDRO YUNIOR", "concepto": "", "monto": 0, "saldo": 58.96, "estado": "", "pagado": 0, "resp": ""}, {"id": 100, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "CASTRO MUÑOZ DANIEL ALEJANDRO", "concepto": "", "monto": 0, "saldo": 172.55, "estado": "", "pagado": 0, "resp": ""}, {"id": 101, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "GILCES SALVATIERRA DENISSE ELIZABETH", "concepto": "", "monto": 0, "saldo": 56.61, "estado": "", "pagado": 0, "resp": ""}, {"id": 102, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 71.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 103, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ZURIDIST CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 49.13, "estado": "", "pagado": 0, "resp": ""}, {"id": 104, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "DELGADO PANCHANA MARIA DE LOURDES", "concepto": "", "monto": 0, "saldo": 2.46, "estado": "", "pagado": 0, "resp": ""}, {"id": 105, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 106, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEDINA DELGADO SANDRO PATRICIO", "concepto": "", "monto": 0, "saldo": 2234.43, "estado": "", "pagado": 0, "resp": ""}, {"id": 107, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 63.95, "estado": "", "pagado": 0, "resp": ""}, {"id": 108, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "JOSE GUILLEN VELEZ CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 3491.51, "estado": "", "pagado": 0, "resp": ""}, {"id": 109, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 68.89, "estado": "", "pagado": 0, "resp": ""}, {"id": 110, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 29.35, "estado": "", "pagado": 0, "resp": ""}, {"id": 111, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ZURIDIST CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 927.38, "estado": "", "pagado": 0, "resp": ""}, {"id": 112, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 36.39, "estado": "", "pagado": 0, "resp": ""}, {"id": 113, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ZURIDIST CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 630.59, "estado": "", "pagado": 0, "resp": ""}, {"id": 114, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 55.31, "estado": "", "pagado": 0, "resp": ""}, {"id": 115, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 6.83, "estado": "", "pagado": 0, "resp": ""}, {"id": 116, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 482.2, "estado": "", "pagado": 0, "resp": ""}, {"id": 117, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "COMPAÑIA DE TRANSPORTE DE CARGA TRANSMERPOR S.A.", "concepto": "", "monto": 0, "saldo": 148.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 118, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "IMPORTADOR EL AMIGO JGCP S.A.", "concepto": "", "monto": 0, "saldo": 11.78, "estado": "", "pagado": 0, "resp": ""}, {"id": 119, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 34.96, "estado": "", "pagado": 0, "resp": ""}, {"id": 120, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 32.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 121, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESSART S.A.", "concepto": "", "monto": 0, "saldo": 368.16, "estado": "", "pagado": 0, "resp": ""}, {"id": 122, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "SUAREZ LOPEZ MARIA LUISA", "concepto": "", "monto": 0, "saldo": 9.22, "estado": "", "pagado": 0, "resp": ""}, {"id": 123, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "HIDALGO SUAREZ JAIME ROBERTO", "concepto": "", "monto": 0, "saldo": 3.29, "estado": "", "pagado": 0, "resp": ""}, {"id": 124, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "LOPEZ ALCIVAR CARLOS ENRIQUE", "concepto": "", "monto": 0, "saldo": 75.02, "estado": "", "pagado": 0, "resp": ""}, {"id": 125, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 94.07, "estado": "", "pagado": 0, "resp": ""}, {"id": 126, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "SUAREZ LOPEZ MARIA LUISA", "concepto": "", "monto": 0, "saldo": 178.87, "estado": "", "pagado": 0, "resp": ""}, {"id": 127, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 919.71, "estado": "", "pagado": 0, "resp": ""}, {"id": 128, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ZURIDIST CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 27.3, "estado": "", "pagado": 0, "resp": ""}, {"id": 129, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 50.34, "estado": "", "pagado": 0, "resp": ""}, {"id": 130, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "GILCES REYNA DUBER IQUE FRAN", "concepto": "", "monto": 0, "saldo": 16.98, "estado": "", "pagado": 0, "resp": ""}, {"id": 131, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 132, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 32.25, "estado": "", "pagado": 0, "resp": ""}, {"id": 133, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 518.88, "estado": "", "pagado": 0, "resp": ""}, {"id": 134, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 41.98, "estado": "", "pagado": 0, "resp": ""}, {"id": 135, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "LMMANTA S.A.S.", "concepto": "", "monto": 0, "saldo": 17.93, "estado": "", "pagado": 0, "resp": ""}, {"id": 136, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "COMPANIA COMERCIAL REINA VICTORIA S.A COMREIVIC", "concepto": "", "monto": 0, "saldo": 222.31, "estado": "", "pagado": 0, "resp": ""}, {"id": 137, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 13.25, "estado": "", "pagado": 0, "resp": ""}, {"id": 138, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 1357.43, "estado": "", "pagado": 0, "resp": ""}, {"id": 139, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "DILIPA, DISTRIBUIDORA DE LIBROS Y PAPELERIA C.LTDA.", "concepto": "", "monto": 0, "saldo": 6.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 140, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 56.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 141, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 0, "saldo": 13.56, "estado": "", "pagado": 0, "resp": ""}, {"id": 142, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 0, "saldo": 4.71, "estado": "", "pagado": 0, "resp": ""}, {"id": 143, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 144, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 44.52, "estado": "", "pagado": 0, "resp": ""}, {"id": 145, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "LMMANTA S.A.S.", "concepto": "", "monto": 0, "saldo": 78.31, "estado": "", "pagado": 0, "resp": ""}, {"id": 146, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PAREDES JARRIN ALEX DANIEL", "concepto": "", "monto": 0, "saldo": 56.61, "estado": "", "pagado": 0, "resp": ""}, {"id": 147, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "METALHIERRO S.A.", "concepto": "", "monto": 0, "saldo": 9014.29, "estado": "", "pagado": 0, "resp": ""}, {"id": 148, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 415.36, "estado": "", "pagado": 0, "resp": ""}, {"id": 149, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 136.98, "estado": "", "pagado": 0, "resp": ""}, {"id": 150, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MENDOZA SOLORZANO EDILMA TERESA", "concepto": "", "monto": 0, "saldo": 244.12, "estado": "", "pagado": 0, "resp": ""}, {"id": 151, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 7.71, "estado": "", "pagado": 0, "resp": ""}, {"id": 152, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 60.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 153, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "GARATE CHANG MARIA LUISA", "concepto": "", "monto": 0, "saldo": 127.4, "estado": "", "pagado": 0, "resp": ""}, {"id": 154, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "CORRALES PARRAGA ANDRES MANUEL", "concepto": "", "monto": 0, "saldo": 439.42, "estado": "", "pagado": 0, "resp": ""}, {"id": 155, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "COMPAÑÌA DE TRANSPORTE DE CARGA PESADA GICEL GRUAS GILER CELORIO S.A.", "concepto": "", "monto": 0, "saldo": 118.8, "estado": "", "pagado": 0, "resp": ""}, {"id": 156, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "CARRILLO ROBLES GERMANIA NARCISA", "concepto": "", "monto": 0, "saldo": 8.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 157, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 35.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 158, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 35.99, "estado": "", "pagado": 0, "resp": ""}, {"id": 159, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 325.42, "estado": "", "pagado": 0, "resp": ""}, {"id": 160, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MENDOZA SOLORZANO EDILMA TERESA", "concepto": "", "monto": 0, "saldo": 130.2, "estado": "", "pagado": 0, "resp": ""}, {"id": 161, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 162, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 55.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 163, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 87.03, "estado": "", "pagado": 0, "resp": ""}, {"id": 164, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PROVEEDORA HIDRAULICA MANGUERAS Y CONEXIONES PROVEHIMACO S.A.", "concepto": "", "monto": 0, "saldo": 93.86, "estado": "", "pagado": 0, "resp": ""}, {"id": 165, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 55.45, "estado": "", "pagado": 0, "resp": ""}, {"id": 166, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MOREIRA CEDEÑO ESCARLIN JAMBOL", "concepto": "", "monto": 0, "saldo": 1452.96, "estado": "", "pagado": 0, "resp": ""}, {"id": 167, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESTACION DE SERVICIOS ROJAS CIA. LTDA. SERVIROJAS", "concepto": "", "monto": 0, "saldo": 7.35, "estado": "", "pagado": 0, "resp": ""}, {"id": 168, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "LMMANTA S.A.S.", "concepto": "", "monto": 0, "saldo": 23.59, "estado": "", "pagado": 0, "resp": ""}, {"id": 169, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ZURIDIST CIA. LTDA.", "concepto": "", "monto": 0, "saldo": 9.15, "estado": "", "pagado": 0, "resp": ""}, {"id": 170, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 61.56, "estado": "", "pagado": 0, "resp": ""}, {"id": 171, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "FIGUEROA ZAMBRANO MERCEDES DEL ROCIO", "concepto": "", "monto": 0, "saldo": 23.29, "estado": "", "pagado": 0, "resp": ""}, {"id": 172, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "VELASQUEZ MORAN ANGELA NARCISA", "concepto": "", "monto": 0, "saldo": 5.42, "estado": "", "pagado": 0, "resp": ""}, {"id": 173, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "NUEVAS OPERACIONES COMERCIALES NUCOPSA S.A.", "concepto": "", "monto": 0, "saldo": 6.62, "estado": "", "pagado": 0, "resp": ""}, {"id": 174, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "METALHIERRO S.A.", "concepto": "", "monto": 0, "saldo": 136.35, "estado": "", "pagado": 0, "resp": ""}, {"id": 175, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 13.25, "estado": "", "pagado": 0, "resp": ""}, {"id": 176, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 35.99, "estado": "", "pagado": 0, "resp": ""}, {"id": 177, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ATIMASA S.A.", "concepto": "", "monto": 0, "saldo": 5.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 178, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 30.5, "estado": "", "pagado": 0, "resp": ""}, {"id": 179, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 35.91, "estado": "", "pagado": 0, "resp": ""}, {"id": 180, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "METALHIERRO S.A.", "concepto": "", "monto": 0, "saldo": 56.62, "estado": "", "pagado": 0, "resp": ""}, {"id": 181, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 260.08, "estado": "", "pagado": 0, "resp": ""}, {"id": 182, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESSART S.A.", "concepto": "", "monto": 0, "saldo": 33.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 183, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MEGAROK S.A.", "concepto": "", "monto": 0, "saldo": 145.7, "estado": "", "pagado": 0, "resp": ""}, {"id": 184, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 46.99, "estado": "", "pagado": 0, "resp": ""}, {"id": 185, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "CEDEÑO SANTANA CARLOS MIGUEL", "concepto": "", "monto": 0, "saldo": 110.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 186, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESSART S.A.", "concepto": "", "monto": 0, "saldo": 6.87, "estado": "", "pagado": 0, "resp": ""}, {"id": 187, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "ESTACION DE SERVICIO JENMER CIA. LTDA. ", "concepto": "", "monto": 0, "saldo": 30.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 188, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "PETROVELCA S.A.", "concepto": "", "monto": 0, "saldo": 16.56, "estado": "", "pagado": 0, "resp": ""}, {"id": 189, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "DELGADO PANCHANA MARIA DE LOURDES", "concepto": "", "monto": 0, "saldo": 0.18, "estado": "", "pagado": 0, "resp": ""}, {"id": 190, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MENDOZA GARCIA LUIS VIRGILIO", "concepto": "", "monto": 0, "saldo": 61.01, "estado": "", "pagado": 0, "resp": ""}, {"id": 191, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MENDOZA GARCIA LUIS VIRGILIO", "concepto": "", "monto": 0, "saldo": 427.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 192, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MARRASQUIN DUENAS JAIME ENRIQUE", "concepto": "", "monto": 0, "saldo": 12.99, "estado": "", "pagado": 0, "resp": ""}, {"id": 193, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "IMPORTADOR EL AMIGO JGCP S.A.", "concepto": "", "monto": 0, "saldo": 25.9, "estado": "", "pagado": 0, "resp": ""}, {"id": 194, "mes": "", "giro": "KAXAMM", "capitulo": "", "tipo": "", "banco": "", "prov": "MENDOZA GARCIA LUIS VIRGILIO", "concepto": "", "monto": 0, "saldo": 65.0, "estado": "", "pagado": 0, "resp": ""}, {"id": 195, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 196, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 197, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 198, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 199, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 200, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 201, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 202, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 203, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 204, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 205, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 206, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 207, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 208, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}, {"id": 209, "mes": "", "giro": "", "capitulo": "", "tipo": "", "banco": "", "prov": "", "concepto": "", "monto": 0, "saldo": 0, "estado": "", "pagado": 0, "resp": ""}], "ing": [{"id": 1, "mes": "2026-07", "empresa": "KAXAMM", "cliente": "PROPEMAR", "concepto": "Plataforma Tunaquick, Pago (4/6)", "proyectado": 10000, "saldo": 5000, "estado": "Pago Proyectado"}, {"id": 2, "mes": "2026-08", "empresa": "KAXAMM", "cliente": "PROPEMAR", "concepto": "Plataforma Tunaquick, Pago (5/6)", "proyectado": 15000, "saldo": 15000, "estado": "Pago Proyectado"}, {"id": 3, "mes": "2026-09", "empresa": "KAXAMM", "cliente": "PROPEMAR", "concepto": "Plataforma Tunaquick, Pago (6/6)", "proyectado": 48000, "saldo": 48000, "estado": "Pago Proyectado"}, {"id": 4, "mes": "2026-12", "empresa": "KAXAMM", "cliente": "PLADECO", "concepto": "Saldo PLADECO UTE", "proyectado": 8000, "saldo": 8000, "estado": "Ejecutado (Sin Liquidar)"}, {"id": 5, "mes": "2026-07", "empresa": "KAXAMM", "cliente": "ETINAR", "concepto": "SALDO ALQUILER RODILLO ABRIL", "proyectado": 265.64, "saldo": 265.64, "estado": "Pagado"}, {"id": 6, "mes": "2026-07", "empresa": "MACMOR", "cliente": "UNACEM", "concepto": "UNACEM LABORATORIO", "proyectado": 6200, "saldo": 6200, "estado": "Pagado"}, {"id": 7, "mes": "2026-07", "empresa": "MACMOR", "cliente": "ETINAR", "concepto": "Ensayos Torre 3, mes MAYO", "proyectado": 1668, "saldo": 1668, "estado": "Pago Proyectado"}, {"id": 8, "mes": "2026-07", "empresa": "MACMOR", "cliente": "ETINAR", "concepto": "Ensayos Torre 4, mes MAYO", "proyectado": 795, "saldo": 795, "estado": "Pago Proyectado"}, {"id": 9, "mes": "2026-08", "empresa": "MACMOR", "cliente": "ETINAR", "concepto": "Ensayos Torre 3, mes JUNIO", "proyectado": 1458, "saldo": 1458, "estado": "Pago Proyectado"}, {"id": 10, "mes": "2026-08", "empresa": "MACMOR", "cliente": "ETINAR", "concepto": "Ensayos Torre 4, mes JUNIO", "proyectado": 2805, "saldo": 2805, "estado": "Pago Proyectado"}, {"id": 11, "mes": "2026-07", "empresa": "MACMOR", "cliente": "LESDASA", "concepto": "Trabajos Manta", "proyectado": 147.26, "saldo": 147.26, "estado": "Pago Proyectado"}, {"id": 12, "mes": "2026-07", "empresa": "MACMOR", "cliente": "LESDASA (CONSORCIO LESTAL II)", "concepto": "Trabajos Jipijapa", "proyectado": 1589.3, "saldo": 1589.3, "estado": "Pago Proyectado"}], "bancos_hoy": [{"banco": "Produbanco KAXAMM", "saldo": 24683, "corte": "2026-07-09"}, {"banco": "Pacífico CMVM (Cons. Mejores Vías Manabí)", "saldo": 88.72, "corte": "2026-07-09"}, {"banco": "Pacífico CMA (Cons. Manabí Avanza)", "saldo": 11581.44, "corte": "2026-07-09"}, {"banco": "Pichincha MACMOR", "saldo": 73793.98, "corte": "2026-07-09"}, {"banco": "Produbanco XAMO", "saldo": 2407, "corte": "2026-07-09"}, {"banco": "Pacífico XAMO", "saldo": 0, "corte": "2026-07-01"}, {"banco": "Internacional XAMO", "saldo": 0, "corte": "2026-07-01"}, {"banco": "POR DEFINIR", "saldo": 0, "corte": "2026-07-01"}], "bancos_proy": {"Produbanco KAXAMM": [-8010.91, -3374.15, 35262.61, 29899.37, 24899.37, 32899.37], "Pacífico CMVM (Cons. Mejores Vías Manabí)": [88.72, 88.72, 88.72, 88.72, 88.72, 88.72], "Pacífico CMA (Cons. Manabí Avanza)": [0, 0, 0, 0, 0, 0], "Pichincha MACMOR": [18992.96, 23255.96, 23255.96, 23255.96, 23255.96, 23255.96], "Produbanco XAMO": [-17535.74, -17535.74, -17535.74, -17535.74, -17535.74, -17535.74], "Pacífico XAMO": [0, 0, 0, 0, 0, 0], "Internacional XAMO": [0, 0, 0, 0, 0, 0], "POR DEFINIR": [-157830.43, -157830.43, -157830.43, -157830.43, -157830.43, -157830.43]}};
+const MES_L = {'2026-07':'Jul','2026-08':'Ago','2026-09':'Sep','2026-10':'Oct','2026-11':'Nov','2026-12':'Dic'};
+const EMPRESAS = [
+  {k:'TODAS', l:'Todas', bancos:null},
+  {k:'ADMINISTRATIVO', l:'Administrativo', bancos:['Produbanco KAXAMM','Pichincha MACMOR','Produbanco XAMO'],
+   note:'Administrativo paga desde cuentas compartidas del grupo.'},
+  {k:'KAXAMM', l:'Kaxamm', bancos:['Produbanco KAXAMM','Pacífico CMA (Cons. Manabí Avanza)','POR DEFINIR'],
+   note:'Incluye "POR DEFINIR" (pagos sin banco asignado).'},
+  {k:'MACMOR', l:'Macmor', bancos:['Pichincha MACMOR']},
+  {k:'CANTERA LA TRAVESIA (XAMO)', l:'Cantera', bancos:['Produbanco XAMO']},
+];
+let emp = 'TODAS';
+
+const fmt = v => (v<0?'-':'') + '$' + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = v => (v<0?'-':'') + '$' + Math.abs(v).toLocaleString('en-US',{maximumFractionDigits:0});
+
+
+
+const tabsEl = document.getElementById('tabs');
+EMPRESAS.forEach(e => {
+  const b = document.createElement('button');
+  b.className = 'tab' + (e.k===emp?' on':'');
+  b.textContent = e.l;
+  b.onclick = () => { emp = e.k; document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',EMPRESAS[i].k===emp)); render(); };
+  tabsEl.appendChild(b);
+});
+
+const fechaSel = document.getElementById('fecha');
+['Hoy', ...D.meses].forEach(m => {
+  const o = document.createElement('option');
+  o.value = m; o.textContent = m==='Hoy' ? 'Hoy' : 'Fin de ' + MES_L[m];
+  fechaSel.appendChild(o);
+});
+fechaSel.onchange = render;
+
+function cxpRows(){ return D.cxp.filter(r => emp==='TODAS' || r.giro===emp); }
+function ingRows(){ return D.ing.filter(r => emp==='TODAS' || r.empresa===emp); }
+
+function grouped(rows, key, val){
+  const m = {};
+  rows.forEach(r => { m[r[key]] = (m[r[key]]||0) + r[val]; });
+  return Object.entries(m).map(([n,v])=>({n, v:Math.round(v*100)/100}))
+    .filter(x => x.n && x.v > 0).sort((a,b)=>b.v-a.v);
+}
+
+function listHTML(items, topN){
+  if (!items.length) return '<div class="empty">Sin cuentas pendientes.</div>';
+  let html = '<div class="sub">Mayores</div>';
+  items.slice(0, topN).forEach(x => html += `<div class="row"><div class="n">${x.n}</div><div class="a">${fmt(x.v)}</div></div>`);
+  const rest = items.slice(topN);
+  if (rest.length){
+    const shown = rest.slice(0, 20);
+    const otros = rest.slice(20);
+    html += `<details><summary>Ver ${rest.length} cuentas menores</summary><div>`;
+    shown.forEach(x => html += `<div class="row"><div class="n">${x.n}</div><div class="a">${fmt(x.v)}</div></div>`);
+    if (otros.length){
+      const s = otros.reduce((a,b)=>a+b.v,0);
+      html += `<div class="row otros"><div class="n">Otros (${otros.length} cuentas)</div><div class="a">${fmt(s)}</div></div>`;
+    }
+    html += '</div></details>';
+  }
+  return html;
+}
+
+let chart = null;
+function render(){
+  const cfg = EMPRESAS.find(e=>e.k===emp);
+  const cx = cxpRows(), ig = ingRows();
+
+  // bancos
+  const fecha = fechaSel.value || 'Hoy';
+  const names = cfg.bancos || D.bancos_hoy.map(b=>b.banco);
+  let btot = 0, bhtml = '';
+  names.forEach(n => {
+    let v;
+    if (fecha === 'Hoy'){
+      const b = D.bancos_hoy.find(x=>x.banco===n); v = b ? b.saldo : 0;
+    } else {
+      const idx = D.meses.indexOf(fecha);
+      v = (D.bancos_proy[n]||[])[idx] ?? 0;
+    }
+    btot += v;
+    bhtml += `<div class="row"><div class="n">${n}</div><div class="a${v<0?' neg':''}">${fmt(v)}</div></div>`;
+  });
+  document.getElementById('bancos').innerHTML = bhtml;
+  document.getElementById('bancos-note').textContent = cfg.note || '';
+  const kb = document.getElementById('k-bancos');
+  kb.textContent = fmt0(btot); kb.className = 'v' + (btot<0?' neg':'');
+
+  // cobrar / pagar
+  const gi = grouped(ig.filter(r=>r.estado!=='Cancelado'), 'cliente', 'saldo');
+  const gc = grouped(cx, 'prov', 'saldo');
+  const totI = ig.filter(r=>r.estado!=='Cancelado').reduce((a,r)=>a+r.saldo,0);
+  const totC = cx.reduce((a,r)=>a+r.saldo,0);
+  document.getElementById('cobrar-tot').textContent = fmt(totI);
+  document.getElementById('pagar-tot').textContent = fmt(totC);
+  document.getElementById('k-cobrar').textContent = fmt0(totI);
+  const kp = document.getElementById('k-pagar');
+  kp.textContent = fmt0(totC); kp.className = 'v' + (totC>0?' neg':'');
+  document.getElementById('cobrar').innerHTML = listHTML(gi, 5);
+  document.getElementById('pagar').innerHTML = listHTML(gc, 5);
+
+  // proyección
+  const ingM = D.meses.map(m => ig.filter(r=>r.mes===m && r.estado!=='Cancelado').reduce((a,r)=>a+r.proyectado,0));
+  const egrM = D.meses.map(m => cx.filter(r=>r.mes===m && r.estado!=='Cancelado').reduce((a,r)=>a+r.monto,0));
+  const neto = ingM.reduce((a,b)=>a+b,0) - egrM.reduce((a,b)=>a+b,0);
+  const kn = document.getElementById('k-neto');
+  kn.textContent = fmt0(neto); kn.className = 'v' + (neto<0?' neg':' pos');
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
+    type:'bar',
+    data:{ labels:D.meses.map(m=>MES_L[m]),
+      datasets:[
+        {label:'Ingresos', data:ingM, backgroundColor:'#2fa876cc', borderRadius:4},
+        {label:'Egresos', data:egrM, backgroundColor:'#c44e52cc', borderRadius:4}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'top', labels:{usePointStyle:true, font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt0(c.parsed.y)}}},
+      scales:{ x:{grid:{display:false}}, y:{ticks:{callback:v=>fmt0(v), font:{size:10}}}}}
+  });
+  let pt = '<tr><th>Mes</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr>';
+  D.meses.forEach((m,i) => {
+    const n = ingM[i]-egrM[i];
+    pt += `<tr><td>${MES_L[m]} 2026</td><td>${fmt(ingM[i])}</td><td>${fmt(egrM[i])}</td><td class="${n<0?'neg':''}">${fmt(n)}</td></tr>`;
+  });
+  const tn = ingM.reduce((a,b)=>a+b,0), te = egrM.reduce((a,b)=>a+b,0);
+  pt += `<tr style="font-weight:700"><td>Total</td><td>${fmt(tn)}</td><td>${fmt(te)}</td><td class="${tn-te<0?'neg':''}">${fmt(tn-te)}</td></tr>`;
+  document.getElementById('proy-table').innerHTML = pt;
+
+  // reposiciones
+  const reps = cx.filter(r=>r.estado==='Por pagar (Reposición)');
+  const rc = document.getElementById('repos-card');
+  if (reps.length){
+    rc.style.display = '';
+    const g = {};
+    reps.forEach(r => { const k = r.resp || '(Sin responsable)'; g[k]=(g[k]||0)+r.saldo; });
+    let rh = '';
+    Object.entries(g).sort((a,b)=>b[1]-a[1]).forEach(([n,v]) => rh += `<div class="row"><div class="n">${n}</div><div class="a">${fmt(v)}</div></div>`);
+    document.getElementById('repos').innerHTML = rh;
+    document.getElementById('repos-tot').textContent = fmt(reps.reduce((a,r)=>a+r.saldo,0));
+  } else rc.style.display = 'none';
+
+  // alertas
+  const alerts = [];
+  const inc = D.cxp.filter(r=>!r.mes).length;
+  if (emp==='TODAS' && inc) alerts.push({s:'high', t:`${inc} CxP sin fecha de generación`, d:'Tienen respaldo contable pero sin Mes: su saldo cuenta aquí, pero no entran en Resumen, MENSUAL ni Bancos.'});
+  const pd = cx.filter(r=>r.banco==='POR DEFINIR').reduce((a,r)=>a+r.saldo,0);
+  if (pd>0.01 && (emp==='TODAS'||emp==='KAXAMM')) alerts.push({s:'high', t:'CxP con banco POR DEFINIR', d:`${fmt(pd)} pendiente sin banco de origen: no baja de ningún saldo real.`});
+  const adm = D.cxp.filter(r=>r.giro==='ADMINISTRATIVO' && r.estado!=='Cancelado').reduce((a,r)=>a+r.monto,0);
+  if (adm>0.01 && (emp==='TODAS'||emp==='ADMINISTRATIVO')) alerts.push({s:'high', t:'Giro "ADMINISTRATIVO" no existe en el catálogo', d:`CxP por ${fmt(adm)} usan ese giro; BASE define "ADM. GRUPO EMPRESARIAL". El Resumen del Excel no los cuenta.`});
+  const sg = D.cxp.filter(r=>!r.giro).length;
+  if (emp==='TODAS' && sg) alerts.push({s:'med', t:`${sg} CxP sin giro`, d:'Solo se ven en la vista "Todas".'});
+  const sp = D.cxp.filter(r=>!r.prov).length;
+  if (emp==='TODAS' && sp) alerts.push({s:'med', t:`${sp} CxP sin proveedor`, d:'Su saldo cuenta en el total pero no salen en las listas.'});
+  const ip = D.ing.filter(r=>r.estado==='Pagado' && r.saldo>0).length;
+  if (emp==='TODAS' && ip) alerts.push({s:'med', t:`${ip} ingresos "Pagado" sin valor de pago`, d:'Siguen contando como por cobrar.'});
+  document.getElementById('alertas').innerHTML = alerts.length
+    ? alerts.map(a=>`<div class="alert ${a.s==='high'?'high':''}"><b>⚠ ${a.t}</b><span>${a.d}</span></div>`).join('')
+    : '<div class="empty">Sin alertas para esta vista.</div>';
+}
+</script>
+
+<script>
+let D = D_BACKUP;
+const SHARE = 'u!aHR0cHM6Ly8xZHJ2Lm1zL2YvYy8wNmRlMDcyMDViMDdjMGM2L0lnQXBEU1NlRmVweVRidkV0QVVxMGg2LUFSOGRlSF82VFg2d2FHS2FDQnJBb3IwP2U9VDhqWjU1';
+const API = 'https://api.onedrive.com/v1.0/shares/' + SHARE + '/root/children';
+
+function setStatus(txt, ok){
+  const el = document.getElementById('status');
+  el.textContent = txt;
+  el.style.color = ok ? '#7ee2a8' : '#f5c4b3';
+}
+
+function cellv(ws, addr){ const c = ws[addr]; return (c && c.v !== undefined) ? c.v : null; }
+
+function parseWorkbook(buf){
+  const wb = XLSX.read(buf, {type:'array'});
+  const cx = wb.Sheets['CxP'], ing = wb.Sheets['Ingresos'], base = wb.Sheets['BASE'], bs = wb.Sheets['Bancos'];
+  if (!cx || !ing || !base || !bs) throw new Error('faltan hojas');
+  if (cellv(cx,'D8') !== 'Giro' || String(cellv(cx,'AE8')||'').indexOf('Saldo') !== 0 ||
+      String(cellv(cx,'AI8')||'').indexOf('Monto') !== 0 || cellv(cx,'AJ8') !== 'Estado')
+    throw new Error('estructura de CxP cambió (columnas movidas)');
+  const cxp = [];
+  for (let r = 9; r <= 2000; r++){
+    const id = cellv(cx, 'A'+r);
+    if (id === null || id === '') continue;
+    cxp.push({ id:id, mes:cellv(cx,'C'+r)||'', giro:cellv(cx,'D'+r)||'',
+      capitulo:cellv(cx,'E'+r)||'', banco:cellv(cx,'AF'+r)||'', prov:cellv(cx,'AG'+r)||'',
+      concepto:cellv(cx,'AH'+r)||'', monto:+cellv(cx,'AI'+r)||0, saldo:+cellv(cx,'AE'+r)||0,
+      estado:cellv(cx,'AJ'+r)||'', pagado:+cellv(cx,'AM'+r)||0, resp:cellv(cx,'AO'+r)||'' });
+  }
+  const ingr = [];
+  for (let r = 9; r <= 2000; r++){
+    const id = cellv(ing, 'A'+r);
+    if (id === null || id === '') continue;
+    ingr.push({ id:id, mes:cellv(ing,'C'+r)||'', empresa:cellv(ing,'D'+r)||'',
+      cliente:cellv(ing,'H'+r)||'', concepto:cellv(ing,'G'+r)||'',
+      proyectado:+cellv(ing,'I'+r)||0, saldo:+cellv(ing,'N'+r)||0, estado:cellv(ing,'J'+r)||'' });
+  }
+  const bancos_hoy = [];
+  for (let r = 4; r <= 13; r++){
+    const n = cellv(base,'T'+r);
+    if (n) bancos_hoy.push({banco:n, saldo:+cellv(base,'V'+r)||0});
+  }
+  if (!bancos_hoy.length) throw new Error('BASE sin bancos');
+  const bancos_proy = {};
+  for (let r = 31; r <= 40; r++){
+    const n = cellv(bs,'A'+r);
+    if (n && n !== 0) bancos_proy[n] = ['B','C','D','E','F','G'].map(c=>+cellv(bs,c+r)||0);
+  }
+  if (!cxp.length) throw new Error('CxP sin registros');
+  return { meses:D_BACKUP.meses, cxp:cxp, ing:ingr, bancos_hoy:bancos_hoy, bancos_proy:bancos_proy };
+}
+
+async function cargarOneDrive(){
+  try{
+    const res = await fetch(API, {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const js = await res.json();
+    const files = (js.value || []).filter(f =>
+      /\.xlsx$/i.test(f.name) && /matriz/i.test(f.name) && f['@content.downloadUrl']);
+    if (!files.length) throw new Error('no hay archivos MATRIZ*.xlsx en la carpeta');
+    files.sort((a,b) => new Date(b.lastModifiedDateTime) - new Date(a.lastModifiedDateTime));
+    const f = files[0];
+    const res2 = await fetch(f['@content.downloadUrl'], {cache:'no-store'});
+    if (!res2.ok) throw new Error('descarga HTTP ' + res2.status);
+    const buf = await res2.arrayBuffer();
+    D = parseWorkbook(buf);
+    const fecha = new Date(f.lastModifiedDateTime);
+    setStatus('● datos en vivo · ' + f.name + ' · ' + fecha.toLocaleString('es-EC', {dateStyle:'medium', timeStyle:'short'}), true);
+  } catch(e){
+    D = D_BACKUP;
+    setStatus('sin conexión a OneDrive (' + e.message + ') · mostrando respaldo del ' + D_BACKUP.actualizado, false);
+  }
+  render();
+}
+render();
+cargarOneDrive();
+</script>
+</body>
+</html>
