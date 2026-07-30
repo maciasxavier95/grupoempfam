@@ -7,6 +7,8 @@
 <title>Dashboard financiero — Grupo empresarial</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>window.Chart || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"><\/script>')</script>
+<script>window.XLSX || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>')</script>
 <style>
 :root{
   --bg:#f4f5f7; --card:#fff; --navy:#1a2440; --blue:#2f6fed;
@@ -109,7 +111,7 @@ footer{text-align:center;font-size:11.5px;color:var(--muted);padding:14px 0;}
   <div id="alertas"></div>
 </div>
 
-<footer>Generado desde MATRIZ CxP e Ingresos · datos embebidos (sin conexión a la matriz en vivo)</footer>
+<footer>Fuente: MATRIZ CxP e Ingresos en OneDrive · si no hay conexión se muestra el último respaldo embebido</footer>
 </div>
 
 <script>
@@ -221,6 +223,15 @@ function render(){
   const neto = ingM.reduce((a,b)=>a+b,0) - egrM.reduce((a,b)=>a+b,0);
   const kn = document.getElementById('k-neto');
   kn.textContent = fmt0(neto); kn.className = 'v' + (neto<0?' neg':' pos');
+  let pt = '<tr><th>Mes</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr>';
+  D.meses.forEach((m,i) => {
+    const n = ingM[i]-egrM[i];
+    pt += `<tr><td>${MES_L[m]} 2026</td><td>${fmt(ingM[i])}</td><td>${fmt(egrM[i])}</td><td class="${n<0?'neg':''}">${fmt(n)}</td></tr>`;
+  });
+  const tn = ingM.reduce((a,b)=>a+b,0), te = egrM.reduce((a,b)=>a+b,0);
+  pt += `<tr style="font-weight:700"><td>Total</td><td>${fmt(tn)}</td><td>${fmt(te)}</td><td class="${tn-te<0?'neg':''}">${fmt(tn-te)}</td></tr>`;
+  document.getElementById('proy-table').innerHTML = pt;
+  try {
   if (chart) chart.destroy();
   chart = new Chart(document.getElementById('chart'), {
     type:'bar',
@@ -233,14 +244,9 @@ function render(){
         tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt0(c.parsed.y)}}},
       scales:{ x:{grid:{display:false}}, y:{ticks:{callback:v=>fmt0(v), font:{size:10}}}}}
   });
-  let pt = '<tr><th>Mes</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr>';
-  D.meses.forEach((m,i) => {
-    const n = ingM[i]-egrM[i];
-    pt += `<tr><td>${MES_L[m]} 2026</td><td>${fmt(ingM[i])}</td><td>${fmt(egrM[i])}</td><td class="${n<0?'neg':''}">${fmt(n)}</td></tr>`;
-  });
-  const tn = ingM.reduce((a,b)=>a+b,0), te = egrM.reduce((a,b)=>a+b,0);
-  pt += `<tr style="font-weight:700"><td>Total</td><td>${fmt(tn)}</td><td>${fmt(te)}</td><td class="${tn-te<0?'neg':''}">${fmt(tn-te)}</td></tr>`;
-  document.getElementById('proy-table').innerHTML = pt;
+  } catch(e) {
+    document.querySelector('.chartbox').innerHTML = '<div class="empty">Gráfico no disponible en este navegador — los valores están en la tabla.</div>';
+  }
 
   // reposiciones
   const reps = cx.filter(r=>r.estado==='Por pagar (Reposición)');
