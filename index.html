@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>Dashboard financiero — Grupo empresarial</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script>window.Chart || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"><\/script>')</script>
 <script>window.XLSX || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>')</script>
 <style>
 :root{
@@ -96,7 +94,7 @@ footer{text-align:center;font-size:11.5px;color:var(--muted);padding:14px 0;}
 
 <div class="card">
   <h2>Proyección de ingresos vs. egresos</h2>
-  <div class="chartbox"><canvas id="chart"></canvas></div>
+  <div class="chartbox" id="chart"></div>
   <table id="proy-table"></table>
 </div>
 
@@ -179,7 +177,29 @@ function listHTML(items, topN){
   return html;
 }
 
-let chart = null;
+function svgChart(ing, egr, labels){
+  const W=700, H=260, padL=56, padR=10, padT=26, padB=26;
+  const n = labels.length;
+  const maxV = Math.max(1, ...ing, ...egr);
+  const cw = (W-padL-padR)/n, bw = Math.min(26, cw*0.32);
+  const y = v => padT + (H-padT-padB) * (1 - v/maxV);
+  const hgt = v => (H-padT-padB) * (v/maxV);
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">';
+  for (let i=0;i<=4;i++){
+    const gv = maxV*i/4, gy = y(gv);
+    s += '<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#e8eaee" stroke-width="1"/>';
+    s += '<text x="'+(padL-6)+'" y="'+(gy+3)+'" text-anchor="end" font-size="9" fill="#9aa0a8">'+fmt0(gv)+'</text>';
+  }
+  for (let i=0;i<n;i++){
+    const cx0 = padL + cw*i + cw/2;
+    s += '<rect x="'+(cx0-bw-2)+'" y="'+y(ing[i])+'" width="'+bw+'" height="'+hgt(ing[i])+'" rx="3" fill="#2fa876"><title>Ingresos '+labels[i]+': '+fmt(ing[i])+'</title></rect>';
+    s += '<rect x="'+(cx0+2)+'" y="'+y(egr[i])+'" width="'+bw+'" height="'+hgt(egr[i])+'" rx="3" fill="#c44e52"><title>Egresos '+labels[i]+': '+fmt(egr[i])+'</title></rect>';
+    s += '<text x="'+cx0+'" y="'+(H-8)+'" text-anchor="middle" font-size="10" fill="#6b7280">'+labels[i]+'</text>';
+  }
+  s += '<rect x="'+padL+'" y="6" width="9" height="9" rx="2" fill="#2fa876"/><text x="'+(padL+13)+'" y="14" font-size="10" fill="#6b7280">Ingresos</text>';
+  s += '<rect x="'+(padL+75)+'" y="6" width="9" height="9" rx="2" fill="#c44e52"/><text x="'+(padL+88)+'" y="14" font-size="10" fill="#6b7280">Egresos</text>';
+  return s + '</svg>';
+}
 function render(){
   const cfg = EMPRESAS.find(e=>e.k===emp);
   const cx = cxpRows(), ig = ingRows();
@@ -231,22 +251,7 @@ function render(){
   const tn = ingM.reduce((a,b)=>a+b,0), te = egrM.reduce((a,b)=>a+b,0);
   pt += `<tr style="font-weight:700"><td>Total</td><td>${fmt(tn)}</td><td>${fmt(te)}</td><td class="${tn-te<0?'neg':''}">${fmt(tn-te)}</td></tr>`;
   document.getElementById('proy-table').innerHTML = pt;
-  try {
-  if (chart) chart.destroy();
-  chart = new Chart(document.getElementById('chart'), {
-    type:'bar',
-    data:{ labels:D.meses.map(m=>MES_L[m]),
-      datasets:[
-        {label:'Ingresos', data:ingM, backgroundColor:'#2fa876cc', borderRadius:4},
-        {label:'Egresos', data:egrM, backgroundColor:'#c44e52cc', borderRadius:4}]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{position:'top', labels:{usePointStyle:true, font:{size:11}}},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt0(c.parsed.y)}}},
-      scales:{ x:{grid:{display:false}}, y:{ticks:{callback:v=>fmt0(v), font:{size:10}}}}}
-  });
-  } catch(e) {
-    document.querySelector('.chartbox').innerHTML = '<div class="empty">Gráfico no disponible en este navegador — los valores están en la tabla.</div>';
-  }
+  document.getElementById('chart').innerHTML = svgChart(ingM, egrM, D.meses.map(m=>MES_L[m]));
 
   // reposiciones
   const reps = cx.filter(r=>r.estado==='Por pagar (Reposición)');
