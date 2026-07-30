@@ -327,7 +327,9 @@ function parseWorkbook(buf){
   return { meses:D_BACKUP.meses, cxp:cxp, ing:ingr, bancos_hoy:bancos_hoy, bancos_proy:bancos_proy };
 }
 
+let ultimaCarga = 0;
 async function cargarOneDrive(){
+  ultimaCarga = Date.now();
   try{
     const res = await fetch(API, {cache:'no-store'});
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -351,6 +353,10 @@ async function cargarOneDrive(){
 }
 render();
 cargarOneDrive();
+setInterval(cargarOneDrive, 60*60*1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 5*60*1000) cargarOneDrive();
+});
 </script>
 </body>
 </html>
