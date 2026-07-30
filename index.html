@@ -288,8 +288,8 @@ function render(){
 
 <script>
 let D = D_BACKUP;
-const SHARE = 'u!aHR0cHM6Ly8xZHJ2Lm1zL2YvYy8wNmRlMDcyMDViMDdjMGM2L0lnQXBEU1NlRmVweVRidkV0QVVxMGg2LUFSOGRlSF82VFg2d2FHS2FDQnJBb3IwP2U9VDhqWjU1';
-const API = 'https://api.onedrive.com/v1.0/shares/' + SHARE + '/root/children';
+const FILE_SHARE = 'u!aHR0cHM6Ly8xZHJ2Lm1zL3gvYy8wNmRlMDcyMDViMDdjMGM2L0lRU3BHZ1NpNG1UU1RyeUdHSmk1R3BxWEFkNDFDQlNmNWEwVEh6RTdkalpUdUhR';
+const FOLDER_SHARE = 'u!aHR0cHM6Ly8xZHJ2Lm1zL2YvYy8wNmRlMDcyMDViMDdjMGM2L0lnQXBEU1NlRmVweVRidkV0QVVxMGg2LUFSOGRlSF82VFg2d2FHS2FDQnJBb3IwP2U9VDhqWjU1';
 
 function setStatus(txt, ok){
   const el = document.getElementById('status');
@@ -338,30 +338,62 @@ function parseWorkbook(buf){
   return { meses:D_BACKUP.meses, cxp:cxp, ing:ingr, bancos_hoy:bancos_hoy, bancos_proy:bancos_proy };
 }
 
+async function fetchBuf(url){
+  const res = await fetch(url, {cache:'no-store'});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.arrayBuffer();
+}
+
+async function metodoDirecto(base){
+  const buf = await fetchBuf(base + '/root/content');
+  let nombre = 'MATRIZ (OneDrive)', fecha = '';
+  try {
+    const meta = await (await fetch(base + '/root', {cache:'no-store'})).json();
+    if (meta.name) nombre = meta.name;
+    if (meta.lastModifiedDateTime) fecha = new Date(meta.lastModifiedDateTime).toLocaleString('es-EC',{dateStyle:'medium',timeStyle:'short'});
+  } catch(e){}
+  return {buf:buf, nombre:nombre, fecha:fecha};
+}
+
+async function metodoCarpeta(){
+  const res = await fetch('https://api.onedrive.com/v1.0/shares/' + FOLDER_SHARE + '/root/children', {cache:'no-store'});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const js = await res.json();
+  const files = (js.value || []).filter(f => /\.xlsx$/i.test(f.name) && /matriz/i.test(f.name) && f['@content.downloadUrl']);
+  if (!files.length) throw new Error('sin MATRIZ*.xlsx');
+  files.sort((a,b) => new Date(b.lastModifiedDateTime) - new Date(a.lastModifiedDateTime));
+  const f = files[0];
+  const buf = await fetchBuf(f['@content.downloadUrl']);
+  return {buf:buf, nombre:f.name, fecha:new Date(f.lastModifiedDateTime).toLocaleString('es-EC',{dateStyle:'medium',timeStyle:'short'})};
+}
+
+const METODOS = [
+  ['A', () => metodoDirecto('https://api.onedrive.com/v1.0/shares/' + FILE_SHARE)],
+  ['B', () => metodoDirecto('https://my.microsoftpersonalcontent.com/_api/v2.0/shares/' + FILE_SHARE)],
+  ['C', async () => { const buf = await fetchBuf('https://api.onedrive.com/v1.0/shares/' + FILE_SHARE + '/driveItem/content'); return {buf:buf, nombre:'MATRIZ (OneDrive)', fecha:''}; }],
+  ['D', metodoCarpeta],
+];
+
 let ultimaCarga = 0;
 async function cargarOneDrive(){
   ultimaCarga = Date.now();
-  try{
-    const res = await fetch(API, {cache:'no-store'});
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const js = await res.json();
-    const files = (js.value || []).filter(f =>
-      /\.xlsx$/i.test(f.name) && /matriz/i.test(f.name) && f['@content.downloadUrl']);
-    if (!files.length) throw new Error('no hay archivos MATRIZ*.xlsx en la carpeta');
-    files.sort((a,b) => new Date(b.lastModifiedDateTime) - new Date(a.lastModifiedDateTime));
-    const f = files[0];
-    const res2 = await fetch(f['@content.downloadUrl'], {cache:'no-store'});
-    if (!res2.ok) throw new Error('descarga HTTP ' + res2.status);
-    const buf = await res2.arrayBuffer();
-    D = parseWorkbook(buf);
-    const fecha = new Date(f.lastModifiedDateTime);
-    setStatus('● datos en vivo · ' + f.name + ' · ' + fecha.toLocaleString('es-EC', {dateStyle:'medium', timeStyle:'short'}), true);
-  } catch(e){
-    D = D_BACKUP;
-    setStatus('sin conexión a OneDrive (' + e.message + ') · mostrando respaldo del ' + D_BACKUP.actualizado, false);
+  const errores = [];
+  for (const [tag, fn] of METODOS){
+    try {
+      const r = await fn();
+      D = parseWorkbook(r.buf);
+      setStatus('● datos en vivo · ' + r.nombre + (r.fecha ? ' · ' + r.fecha : '') + ' · vía ' + tag, true);
+      render();
+      return;
+    } catch(e){
+      errores.push(tag + ':' + e.message);
+    }
   }
+  D = D_BACKUP;
+  setStatus('sin conexión a OneDrive [' + errores.join(' | ') + '] · respaldo del ' + D_BACKUP.actualizado, false);
   render();
 }
+
 render();
 cargarOneDrive();
 setInterval(cargarOneDrive, 60*60*1000);
